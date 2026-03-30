@@ -5,17 +5,25 @@ import { useRef, useState, useEffect } from "react";
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3];
 
 type StemKey = "vocals" | "drums" | "bass" | "melody";
-
 type Stems = Record<StemKey, number>;
 
 export default function Home() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const songs = [
-    { title: "Song 1", src: "/song1.mp3" },
-    { title: "Song 2", src: "/song2.mp3" },
-    { title: "Song 3", src: "/song3.mp3" },
+  // 🔥 NEW: filename-based songs
+  const files = [
+    "TheWeeknd_BlindingLights.mp3",
+    "Drake_GodsPlan.mp3",
+    "TravisScott_Goosebumps.mp3",
   ];
+
+  const songs = files.map((file) => {
+    const [artist, title] = file.replace(".mp3", "").split("_");
+    return {
+      title: `${artist} - ${title}`,
+      src: `/music/${file}`,
+    };
+  });
 
   const [screen, setScreen] = useState("library");
   const [currentSong, setCurrentSong] = useState(0);
@@ -23,8 +31,8 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
   const [liked, setLiked] = useState<number[]>([]);
   const [speed, setSpeed] = useState(1);
+  const [light, setLight] = useState(false);
 
-  // Fake stems (UI only)
   const [stems, setStems] = useState<Stems>({
     vocals: 1,
     drums: 1,
@@ -59,43 +67,63 @@ export default function Home() {
     return () => audio.removeEventListener("timeupdate", update);
   }, []);
 
-  // AUTO PLAY
+  // 🔥 FIXED SPEED + AUTOPLAY
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.load();
-      audioRef.current.playbackRate = speed;
-      if (playing) audioRef.current.play();
+    if (!audioRef.current) return;
+
+    audioRef.current.load();
+
+    // force correct speed
+    audioRef.current.playbackRate = speed;
+
+    if (playing) {
+      audioRef.current.play().catch(() => {});
     }
-  }, [currentSong, speed]);
+  }, [currentSong, speed, playing]);
 
   // SEEK
   const seek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!audioRef.current) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const percent = (e.clientX - rect.left) / rect.width;
-    audioRef.current.currentTime = percent * audioRef.current.duration;
+    audioRef.current.currentTime =
+      percent * audioRef.current.duration;
   };
 
-  // SPEED SNAP
+  // 🔥 SPEED FIX (no weird snapping bug)
   const changeSpeed = (val: number) => {
-    let closest = SPEEDS.reduce((prev, curr) =>
-      Math.abs(curr - val) < Math.abs(prev - val) ? curr : prev
-    );
-    setSpeed(closest);
+    setSpeed(val);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = val;
+    }
   };
 
   return (
-    <div className="h-screen bg-black text-white flex flex-col">
+    <div
+      className={`h-screen flex flex-col ${
+        light ? "bg-white text-black" : "bg-black text-white"
+      }`}
+    >
+      {/* 🌙 LIGHT MODE */}
+      <button
+        className="absolute top-4 right-4"
+        onClick={() => setLight(!light)}
+      >
+        🌙/☀️
+      </button>
 
       {/* LIBRARY */}
       {screen === "library" && (
         <div className="p-6 flex-1">
-          <h1 className="text-lg mb-4">Library</h1>
 
           {songs.map((song, i) => (
             <div
               key={i}
-              className="flex justify-between p-3 bg-zinc-800 mb-2 rounded cursor-pointer hover:bg-zinc-700"
+              className={`flex justify-between p-3 mb-2 rounded cursor-pointer ${
+                light
+                  ? "bg-gray-200 hover:bg-gray-300"
+                  : "bg-zinc-800 hover:bg-zinc-700"
+              }`}
               onClick={() => openSong(i)}
             >
               {song.title}
@@ -129,7 +157,7 @@ export default function Home() {
           </button>
 
           <button
-            className="absolute top-4 right-4"
+            className="absolute top-4 right-16"
             onClick={() => setScreen("mixer")}
           >
             Mixer
@@ -139,8 +167,11 @@ export default function Home() {
 
           <h2>{songs[currentSong].title}</h2>
 
+          {/* PROGRESS */}
           <div
-            className="w-64 h-2 bg-gray-600 mt-4 cursor-pointer"
+            className={`w-64 h-2 mt-4 cursor-pointer ${
+              light ? "bg-gray-300" : "bg-gray-600"
+            }`}
             onClick={seek}
           >
             <div
@@ -149,10 +180,15 @@ export default function Home() {
             />
           </div>
 
+          {/* CONTROLS */}
           <div className="mt-4 flex gap-4">
-            <button onClick={() =>
-              setCurrentSong((prev) => (prev - 1 + songs.length) % songs.length)
-            }>
+            <button
+              onClick={() =>
+                setCurrentSong(
+                  (prev) => (prev - 1 + songs.length) % songs.length
+                )
+              }
+            >
               ⏮
             </button>
 
@@ -160,25 +196,29 @@ export default function Home() {
               {playing ? "⏸" : "▶"}
             </button>
 
-            <button onClick={() =>
-              setCurrentSong((prev) => (prev + 1) % songs.length)
-            }>
+            <button
+              onClick={() =>
+                setCurrentSong((prev) => (prev + 1) % songs.length)
+              }
+            >
               ⏭
             </button>
           </div>
 
+          {/* SPEED */}
           <input
             type="range"
             min="0.25"
             max="3"
             step="0.01"
+            value={speed}
             onChange={(e) => changeSpeed(parseFloat(e.target.value))}
             className="mt-4"
           />
 
-          <div>{speed}x</div>
+          <div>{speed.toFixed(2)}x</div>
 
-          {/* Quick stems */}
+          {/* STEMS */}
           <div className="flex gap-2 mt-4">
             {(Object.keys(stems) as StemKey[]).map((key) => (
               <button
@@ -204,56 +244,55 @@ export default function Home() {
 
           <button onClick={() => setScreen("now")}>← Back</button>
 
-          <h2 className="mb-4">Mixer</h2>
+          {(Object.entries(stems) as [StemKey, number][]).map(
+            ([key, val]) => (
+              <div key={key} className="mb-4">
 
-          {(Object.entries(stems) as [StemKey, number][]).map(([key, val]) => (
-            <div key={key} className="mb-4">
+                <div className="flex justify-between">
+                  <span>{key}</span>
 
-              <div className="flex justify-between">
-                <span>{key}</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() =>
+                        setStems({ ...stems, [key]: 0 })
+                      }
+                    >
+                      Mute
+                    </button>
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={() =>
-                      setStems({ ...stems, [key]: 0 })
-                    }
-                  >
-                    Mute
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      setStems(
-                        Object.fromEntries(
-                          (Object.keys(stems) as StemKey[]).map((k) => [
-                            k,
-                            k === key ? 1 : 0,
-                          ])
-                        ) as Stems
-                      )
-                    }
-                  >
-                    SOLO
-                  </button>
+                    <button
+                      onClick={() =>
+                        setStems(
+                          Object.fromEntries(
+                            (Object.keys(stems) as StemKey[]).map(
+                              (k) => [k, k === key ? 1 : 0]
+                            )
+                          ) as Stems
+                        )
+                      }
+                    >
+                      SOLO
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={val}
-                onChange={(e) =>
-                  setStems({
-                    ...stems,
-                    [key]: parseFloat(e.target.value),
-                  })
-                }
-                className="w-full"
-              />
-            </div>
-          ))}
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={val}
+                  onChange={(e) =>
+                    setStems({
+                      ...stems,
+                      [key]: parseFloat(e.target.value),
+                    })
+                  }
+                  className="w-full"
+                />
+              </div>
+            )
+          )}
         </div>
       )}
 
