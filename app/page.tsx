@@ -2,6 +2,12 @@
 
 import { useRef, useState, useEffect } from "react";
 
+const SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3];
+
+type StemKey = "vocals" | "drums" | "bass" | "melody";
+
+type Stems = Record<StemKey, number>;
+
 export default function Home() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -11,147 +17,255 @@ export default function Home() {
     { title: "Song 3", src: "/song3.mp3" },
   ];
 
+  const [screen, setScreen] = useState("library");
   const [currentSong, setCurrentSong] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [darkMode, setDarkMode] = useState(true);
+  const [liked, setLiked] = useState<number[]>([]);
+  const [speed, setSpeed] = useState(1);
 
-  const playSong = (index: number) => {
-    setCurrentSong(index);
-    setPlaying(true);
-  };
+  // Fake stems (UI only)
+  const [stems, setStems] = useState<Stems>({
+    vocals: 1,
+    drums: 1,
+    bass: 1,
+    melody: 1,
+  });
 
+  // PLAY / PAUSE
   const togglePlay = () => {
     if (!audioRef.current) return;
-
-    if (playing) {
-      audioRef.current.pause();
-    } else {
-      audioRef.current.play();
-    }
-
+    playing ? audioRef.current.pause() : audioRef.current.play();
     setPlaying(!playing);
   };
 
-  // Update progress
+  // SELECT SONG
+  const openSong = (index: number) => {
+    setCurrentSong(index);
+    setScreen("now");
+    setPlaying(true);
+  };
+
+  // PROGRESS
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const updateProgress = () => {
-      const percent = (audio.currentTime / audio.duration) * 100;
-      setProgress(percent || 0);
+    const update = () => {
+      setProgress((audio.currentTime / audio.duration) * 100 || 0);
     };
 
-    audio.addEventListener("timeupdate", updateProgress);
-
-    return () => {
-      audio.removeEventListener("timeupdate", updateProgress);
-    };
+    audio.addEventListener("timeupdate", update);
+    return () => audio.removeEventListener("timeupdate", update);
   }, []);
 
-  // Auto play on song change
+  // AUTO PLAY
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.load();
-      if (playing) {
-        audioRef.current.play();
-      }
+      audioRef.current.playbackRate = speed;
+      if (playing) audioRef.current.play();
     }
-  }, [currentSong]);
+  }, [currentSong, speed]);
+
+  // SEEK
+  const seek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!audioRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const percent = (e.clientX - rect.left) / rect.width;
+    audioRef.current.currentTime = percent * audioRef.current.duration;
+  };
+
+  // SPEED SNAP
+  const changeSpeed = (val: number) => {
+    let closest = SPEEDS.reduce((prev, curr) =>
+      Math.abs(curr - val) < Math.abs(prev - val) ? curr : prev
+    );
+    setSpeed(closest);
+  };
 
   return (
-    <div
-      className={`h-screen flex flex-col transition-colors duration-300 ${
-        darkMode
-          ? "bg-[#0a0a0a] text-white"
-          : "bg-[#f5f9ff] text-black"
-      }`}
-    >
-      {/* Toggle Theme */}
-      <button
-        onClick={() => setDarkMode(!darkMode)}
-        className="absolute top-4 right-4 px-3 py-1 rounded bg-gray-300 text-black text-sm"
-      >
-        {darkMode ? "Light" : "Dark"}
-      </button>
+    <div className="h-screen bg-black text-white flex flex-col">
 
-      {/* Main */}
-      <div className="flex flex-1">
+      {/* LIBRARY */}
+      {screen === "library" && (
+        <div className="p-6 flex-1">
+          <h1 className="text-lg mb-4">Library</h1>
 
-        {/* Sidebar */}
-        <div
-          className={`w-56 p-5 ${
-            darkMode ? "bg-[#1a1a2e]" : "bg-white shadow"
-          }`}
-        >
-          <h1 className="text-lg font-medium">Library</h1>
-        </div>
+          {songs.map((song, i) => (
+            <div
+              key={i}
+              className="flex justify-between p-3 bg-zinc-800 mb-2 rounded cursor-pointer hover:bg-zinc-700"
+              onClick={() => openSong(i)}
+            >
+              {song.title}
 
-        {/* Playlist */}
-        <div className="flex-1 p-6">
-          <h2 className="text-lg font-medium mb-4">Playlist</h2>
-
-          <div className="space-y-2">
-            {songs.map((song, index) => (
-              <div
-                key={index}
-                onClick={() => playSong(index)}
-                className={`p-3 rounded cursor-pointer transition-all duration-200 ${
-                  currentSong === index
-                    ? darkMode
-                      ? "bg-purple-600"
-                      : "bg-blue-500 text-white"
-                    : darkMode
-                    ? "bg-zinc-800 hover:bg-zinc-700"
-                    : "bg-gray-200 hover:bg-gray-300"
-                }`}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLiked((prev) =>
+                    prev.includes(i)
+                      ? prev.filter((x) => x !== i)
+                      : [...prev, i]
+                  );
+                }}
               >
-                {song.title}
-              </div>
+                {liked.includes(i) ? "❤️" : "🤍"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* NOW PLAYING */}
+      {screen === "now" && (
+        <div className="flex-1 flex flex-col items-center justify-center">
+
+          <button
+            className="absolute top-4 left-4"
+            onClick={() => setScreen("library")}
+          >
+            ←
+          </button>
+
+          <button
+            className="absolute top-4 right-4"
+            onClick={() => setScreen("mixer")}
+          >
+            Mixer
+          </button>
+
+          <div className="text-6xl animate-bounce mb-6">🎵</div>
+
+          <h2>{songs[currentSong].title}</h2>
+
+          <div
+            className="w-64 h-2 bg-gray-600 mt-4 cursor-pointer"
+            onClick={seek}
+          >
+            <div
+              className="bg-purple-500 h-2"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+
+          <div className="mt-4 flex gap-4">
+            <button onClick={() =>
+              setCurrentSong((prev) => (prev - 1 + songs.length) % songs.length)
+            }>
+              ⏮
+            </button>
+
+            <button onClick={togglePlay}>
+              {playing ? "⏸" : "▶"}
+            </button>
+
+            <button onClick={() =>
+              setCurrentSong((prev) => (prev + 1) % songs.length)
+            }>
+              ⏭
+            </button>
+          </div>
+
+          <input
+            type="range"
+            min="0.25"
+            max="3"
+            step="0.01"
+            onChange={(e) => changeSpeed(parseFloat(e.target.value))}
+            className="mt-4"
+          />
+
+          <div>{speed}x</div>
+
+          {/* Quick stems */}
+          <div className="flex gap-2 mt-4">
+            {(Object.keys(stems) as StemKey[]).map((key) => (
+              <button
+                key={key}
+                onClick={() =>
+                  setStems({
+                    ...stems,
+                    [key]: stems[key] ? 0 : 1,
+                  })
+                }
+                className="bg-zinc-700 px-2 py-1 rounded"
+              >
+                {key}
+              </button>
             ))}
           </div>
         </div>
+      )}
+
+      {/* MIXER */}
+      {screen === "mixer" && (
+        <div className="p-6 flex-1">
+
+          <button onClick={() => setScreen("now")}>← Back</button>
+
+          <h2 className="mb-4">Mixer</h2>
+
+          {(Object.entries(stems) as [StemKey, number][]).map(([key, val]) => (
+            <div key={key} className="mb-4">
+
+              <div className="flex justify-between">
+                <span>{key}</span>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() =>
+                      setStems({ ...stems, [key]: 0 })
+                    }
+                  >
+                    Mute
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      setStems(
+                        Object.fromEntries(
+                          (Object.keys(stems) as StemKey[]).map((k) => [
+                            k,
+                            k === key ? 1 : 0,
+                          ])
+                        ) as Stems
+                      )
+                    }
+                  >
+                    SOLO
+                  </button>
+                </div>
+              </div>
+
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={val}
+                onChange={(e) =>
+                  setStems({
+                    ...stems,
+                    [key]: parseFloat(e.target.value),
+                  })
+                }
+                className="w-full"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* MINI PLAYER */}
+      <div className="bg-zinc-900 p-3 flex justify-between items-center">
+        <span>{songs[currentSong].title}</span>
+        <button onClick={togglePlay}>
+          {playing ? "Pause" : "Play"}
+        </button>
       </div>
 
-      {/* Player */}
-      <div
-        className={`p-4 ${
-          darkMode
-            ? "bg-[#111122] border-t border-zinc-800"
-            : "bg-white border-t"
-        }`}
-      >
-        {/* Progress Bar */}
-        <div className="w-full bg-gray-400 h-1 mb-3 rounded">
-          <div
-            className={`h-1 rounded ${
-              darkMode ? "bg-purple-500" : "bg-blue-500"
-            }`}
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-
-        {/* Controls */}
-        <div className="flex items-center justify-center gap-6">
-          <span className="text-sm">
-            {songs[currentSong].title}
-          </span>
-
-          <button
-            onClick={togglePlay}
-            className={`px-4 py-1 rounded text-white transition ${
-              darkMode
-                ? "bg-purple-600 hover:bg-purple-500"
-                : "bg-blue-500 hover:bg-blue-400"
-            }`}
-          >
-            {playing ? "Pause" : "Play"}
-          </button>
-        </div>
-      </div>
-
-      {/* Audio */}
+      {/* AUDIO */}
       <audio ref={audioRef} src={songs[currentSong].src} />
     </div>
   );
