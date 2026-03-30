@@ -4,6 +4,10 @@ import { useRef, useState, useEffect } from "react";
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3];
 
+type StemKey = "vocals" | "drums" | "bass" | "melody";
+
+type Stems = Record<StemKey, number>;
+
 export default function Home() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -21,7 +25,7 @@ export default function Home() {
   const [speed, setSpeed] = useState(1);
 
   // Fake stems (UI only)
-  const [stems, setStems] = useState({
+  const [stems, setStems] = useState<Stems>({
     vocals: 1,
     drums: 1,
     bass: 1,
@@ -65,9 +69,9 @@ export default function Home() {
   }, [currentSong, speed]);
 
   // SEEK
-  const seek = (e: any) => {
+  const seek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!audioRef.current) return;
-    const rect = e.target.getBoundingClientRect();
+    const rect = e.currentTarget.getBoundingClientRect();
     const percent = (e.clientX - rect.left) / rect.width;
     audioRef.current.currentTime = percent * audioRef.current.duration;
   };
@@ -117,7 +121,6 @@ export default function Home() {
       {screen === "now" && (
         <div className="flex-1 flex flex-col items-center justify-center">
 
-          {/* Back */}
           <button
             className="absolute top-4 left-4"
             onClick={() => setScreen("library")}
@@ -125,7 +128,6 @@ export default function Home() {
             ←
           </button>
 
-          {/* Mixer */}
           <button
             className="absolute top-4 right-4"
             onClick={() => setScreen("mixer")}
@@ -133,12 +135,10 @@ export default function Home() {
             Mixer
           </button>
 
-          {/* Album Animation */}
           <div className="text-6xl animate-bounce mb-6">🎵</div>
 
           <h2>{songs[currentSong].title}</h2>
 
-          {/* Progress */}
           <div
             className="w-64 h-2 bg-gray-600 mt-4 cursor-pointer"
             onClick={seek}
@@ -149,14 +149,24 @@ export default function Home() {
             />
           </div>
 
-          {/* Controls */}
           <div className="mt-4 flex gap-4">
-            <button onClick={() => setCurrentSong((prev) => (prev - 1 + songs.length) % songs.length)}>⏮</button>
-            <button onClick={togglePlay}>{playing ? "⏸" : "▶"}</button>
-            <button onClick={() => setCurrentSong((prev) => (prev + 1) % songs.length)}>⏭</button>
+            <button onClick={() =>
+              setCurrentSong((prev) => (prev - 1 + songs.length) % songs.length)
+            }>
+              ⏮
+            </button>
+
+            <button onClick={togglePlay}>
+              {playing ? "⏸" : "▶"}
+            </button>
+
+            <button onClick={() =>
+              setCurrentSong((prev) => (prev + 1) % songs.length)
+            }>
+              ⏭
+            </button>
           </div>
 
-          {/* Speed */}
           <input
             type="range"
             min="0.25"
@@ -165,15 +175,19 @@ export default function Home() {
             onChange={(e) => changeSpeed(parseFloat(e.target.value))}
             className="mt-4"
           />
+
           <div>{speed}x</div>
 
           {/* Quick stems */}
           <div className="flex gap-2 mt-4">
-            {Object.keys(stems).map((key) => (
+            {(Object.keys(stems) as StemKey[]).map((key) => (
               <button
                 key={key}
                 onClick={() =>
-                  setStems({ ...stems, [key]: stems[key] ? 0 : 1 })
+                  setStems({
+                    ...stems,
+                    [key]: stems[key] ? 0 : 1,
+                  })
                 }
                 className="bg-zinc-700 px-2 py-1 rounded"
               >
@@ -192,7 +206,7 @@ export default function Home() {
 
           <h2 className="mb-4">Mixer</h2>
 
-          {Object.entries(stems).map(([key, val]) => (
+          {(Object.entries(stems) as [StemKey, number][]).map(([key, val]) => (
             <div key={key} className="mb-4">
 
               <div className="flex justify-between">
@@ -211,11 +225,11 @@ export default function Home() {
                     onClick={() =>
                       setStems(
                         Object.fromEntries(
-                          Object.keys(stems).map((k) => [
+                          (Object.keys(stems) as StemKey[]).map((k) => [
                             k,
                             k === key ? 1 : 0,
                           ])
-                        )
+                        ) as Stems
                       )
                     }
                   >
