@@ -6,15 +6,15 @@ export function getMetadata(file: File): Promise<{
 }> {
   return new Promise((resolve, reject) => {
     jsmediatags.read(file, {
-      onSuccess: (tag) => {
+      onSuccess: (tag: { tags: any }) => {
         const tags = tag.tags;
 
         resolve({
-          title: tags.title || "Unknown Title",
-          artist: tags.artist || "Unknown Artist",
+          title: tags.title || "Unknown",
+          artist: tags.artist || "Unknown",
         });
       },
-      onError: (error) => {
+      onError: (error: any) => {
         reject(error);
       },
     });
